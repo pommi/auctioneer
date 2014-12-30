@@ -14,6 +14,7 @@ import (
 
 	"github.com/cloudfoundry-incubator/auctioneer/handlers"
 	"github.com/cloudfoundry-incubator/cf-debug-server"
+	"github.com/cloudfoundry-incubator/cf-http"
 	"github.com/cloudfoundry-incubator/cf-lager"
 	Bbs "github.com/cloudfoundry-incubator/runtime-schema/bbs"
 	"github.com/cloudfoundry-incubator/runtime-schema/bbs/lock_bbs"
@@ -48,7 +49,7 @@ var maxRetries = flag.Int(
 var communicationTimeout = flag.Duration(
 	"communicationTimeout",
 	10*time.Second,
-	"How long the auction will wait to hear back from a cell",
+	"Timeout applied to all HTTP requests.",
 )
 
 var communicationWorkPoolSize = flag.Int(
@@ -83,9 +84,12 @@ var listenAddr = flag.String(
 
 const serverProtocol = "http"
 
-func main() {
+func init() {
 	flag.Parse()
+	cf_http.Initialize(*communicationTimeout)
+}
 
+func main() {
 	logger := cf_lager.New("auctioneer")
 	initializeDropsonde(logger)
 	bbs := initializeBBS(logger)
@@ -115,10 +119,8 @@ func main() {
 }
 
 func initializeAuctionRunner(bbs Bbs.AuctioneerBBS, logger lager.Logger) auctiontypes.AuctionRunner {
-	httpClient := &http.Client{
-		Timeout:   *communicationTimeout,
-		Transport: &http.Transport{},
-	}
+	httpClient := cf_http.NewClient()
+	httpClient.Transport = &http.Transport{}
 
 	delegate := auctionrunnerdelegate.New(httpClient, bbs, logger)
 	return auctionrunner.New(delegate, timeprovider.NewTimeProvider(), *maxRetries, workpool.NewWorkPool(*communicationWorkPoolSize), logger)
