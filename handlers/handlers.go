@@ -25,10 +25,12 @@ func (f loggableHandlerFunc) WithLogger(logger lager.Logger) http.Handler {
 func New(runner auctiontypes.AuctionRunner, logger lager.Logger) http.Handler {
 	taskAuctionHandler := logWrap(route(NewTaskAuctionHandler(runner).Create), logger)
 	lrpAuctionHandler := logWrap(route(NewLRPAuctionHandler(runner).Create), logger)
+	volumeAuctionHandler := logWrap(route(NewVolumeAuctionHandler(runner).Create), logger)
 
 	actions := rata.Handlers{
-		auctioneer.CreateTaskAuctionsRoute: taskAuctionHandler,
-		auctioneer.CreateLRPAuctionsRoute:  lrpAuctionHandler,
+		auctioneer.CreateTaskAuctionsRoute:   taskAuctionHandler,
+		auctioneer.CreateLRPAuctionsRoute:    lrpAuctionHandler,
+		auctioneer.CreateVolumeAuctionsRoute: volumeAuctionHandler,
 	}
 
 	handler, err := rata.NewRouter(auctioneer.Routes, actions)

@@ -40,6 +40,15 @@ func (a *AuctionRunnerDelegate) FetchCellReps() (map[string]auctiontypes.CellRep
 }
 
 func (a *AuctionRunnerDelegate) AuctionCompleted(results auctiontypes.AuctionResults) {
+	for _, vol := range results.FailedVolumes {
+		err := a.bbs.FailVolume(a.logger, vol.VolumeSetGuid, vol.Index, vol.PlacementError)
+		if err != nil {
+			a.logger.Error("failed-to-fail-volume", err, lager.Data{
+				"volume":         vol,
+				"auction-result": "failed",
+			})
+		}
+	}
 	for _, task := range results.FailedTasks {
 		err := a.bbs.FailTask(a.logger, task.Identifier(), task.PlacementError)
 		if err != nil {

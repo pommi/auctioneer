@@ -18,9 +18,11 @@ func (_ auctionMetricEmitterDelegate) FetchStatesCompleted(fetchStatesDuration t
 }
 
 func (_ auctionMetricEmitterDelegate) AuctionCompleted(results auctiontypes.AuctionResults) {
+	auctioneer.VolumeAuctionsStarted.Add(uint64(len(results.SuccessfulVolumes)))
 	auctioneer.LRPAuctionsStarted.Add(uint64(len(results.SuccessfulLRPs)))
 	auctioneer.TaskAuctionsStarted.Add(uint64(len(results.SuccessfulTasks)))
 
+	auctioneer.VolumeAuctionsFailed.Add(uint64(len(results.FailedVolumes)))
 	auctioneer.LRPAuctionsFailed.Add(uint64(len(results.FailedLRPs)))
 	auctioneer.TaskAuctionsFailed.Add(uint64(len(results.FailedTasks)))
 }
