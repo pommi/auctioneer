@@ -76,6 +76,24 @@ var listenAddr = flag.String(
 	"host:port to serve auction and LRP stop requests on",
 )
 
+var certFile = flag.String(
+	"certFile",
+	"",
+	"Location of the client certificate for mutual auth",
+)
+
+var keyFile = flag.String(
+	"keyFile",
+	"",
+	"Location of the client key for mutual auth",
+)
+
+var caFile = flag.String(
+	"caFile",
+	"",
+	"Location of the CA certificate for mutual auth",
+)
+
 const (
 	auctionRunnerTimeout      = 10 * time.Second
 	auctionRunnerWorkPoolSize = 1000
@@ -163,10 +181,17 @@ func initializeBBS(logger lager.Logger, consulSession *consuladapter.Session) Bb
 		logger.Fatal("failed-to-construct-etcd-client-workpool", err, lager.Data{"num-workers": 10}) // should never happen
 	}
 
-	etcdAdapter := etcdstoreadapter.NewETCDStoreAdapter(
+	etcdAdapter, err := etcdstoreadapter.NewTLSClient(
 		strings.Split(*etcdCluster, ","),
+		*certFile,
+		*keyFile,
+		*caFile,
 		workPool,
 	)
+
+	if err != nil {
+		logger.Fatal("failed-to-construct-etcd-tls-client", err)
+	}
 
 	return Bbs.NewAuctioneerBBS(etcdAdapter, consulSession, *receptorTaskHandlerURL, clock.NewClock(), logger)
 }
