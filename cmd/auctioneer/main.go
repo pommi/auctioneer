@@ -120,6 +120,12 @@ var auctionRunnerWorkers = flag.Int(
 	"Max concurrency for cell operations in the auction runner",
 )
 
+var weight = flag.Float64(
+	"weight",
+	0.00,
+	"Weight used to give higher score to cells starting LRPs",
+)
+
 const (
 	auctionRunnerTimeout = 10 * time.Second
 	dropsondeOrigin      = "auctioneer"
@@ -154,7 +160,7 @@ func main() {
 	clock := clock.NewClock()
 	auctioneerServiceClient := auctioneer.NewServiceClient(consulSession, clock)
 
-	auctionRunner := initializeAuctionRunner(logger, *cellStateTimeout, initializeBBSClient(logger))
+	auctionRunner := initializeAuctionRunner(logger, *cellStateTimeout, initializeBBSClient(logger), *weight)
 	auctionServer := initializeAuctionServer(logger, auctionRunner)
 	lockMaintainer := initializeLockMaintainer(logger, auctioneerServiceClient)
 
@@ -185,7 +191,7 @@ func main() {
 	logger.Info("exited")
 }
 
-func initializeAuctionRunner(logger lager.Logger, cellStateTimeout time.Duration, bbsClient bbs.Client) auctiontypes.AuctionRunner {
+func initializeAuctionRunner(logger lager.Logger, cellStateTimeout time.Duration, bbsClient bbs.Client, weight float64) auctiontypes.AuctionRunner {
 	httpClient := cf_http.NewClient()
 	stateClient := cf_http.NewCustomTimeoutClient(cellStateTimeout)
 	repClientFactory := rep.NewClientFactory(httpClient, stateClient)
@@ -203,6 +209,7 @@ func initializeAuctionRunner(logger lager.Logger, cellStateTimeout time.Duration
 		clock.NewClock(),
 		workPool,
 		logger,
+		weight,
 	)
 }
 
