@@ -164,11 +164,13 @@ var _ = Describe("Auctioneer", func() {
 			})
 
 			It("should mark the task as failed in the BBS", func() {
+				var completedTasks []*models.Task
+
 				Eventually(func() []*models.Task {
-					return getTasksByState(bbsClient, models.Task_Completed)
+					completedTasks = getTasksByState(bbsClient, models.Task_Completed)
+					return completedTasks
 				}).Should(HaveLen(1))
 
-				completedTasks := getTasksByState(bbsClient, models.Task_Completed)
 				completedTask := completedTasks[0]
 				Expect(completedTask.TaskGuid).To(Equal("task-guid"))
 				Expect(completedTask.Failed).To(BeTrue())
