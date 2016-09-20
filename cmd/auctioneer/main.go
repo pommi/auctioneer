@@ -1,9 +1,11 @@
 package main
 
 import (
+	"crypto/tls"
 	"errors"
 	"flag"
 	"fmt"
+	"net"
 	"net/url"
 	"os"
 	"strconv"
@@ -225,8 +227,88 @@ func initializeDropsonde(logger lager.Logger) {
 	}
 }
 
+type CustomListener struct {
+	net.Listener
+	tlsConfig *tls.Config
+}
+
+func (cl *CustomListener) Accept() (net.Conn, error) {
+	c, err := cl.Listener.Accept()
+	if err != nil {
+		return nil, err
+	}
+
+	return &UpgradableConn{
+		Conn:      c,
+		tlsConfig: cl.tlsConfig,
+	}, nil
+}
+
+type ReadAheadConn struct {
+	net.Conn
+	buf []byte
+}
+
+func (rac *ReadAheadConn) Read(b []byte) (int, error) {
+	if rac.buf != nil {
+		n := copy(b, rac.buf)
+		// if we copied all of rac.buf then set it to nil, otherwise truncate the
+		// part that was copied
+		if n == len(rac.buf) {
+			rac.buf = nil
+		} else {
+			rac.buf = rac.buf[n:]
+		}
+		// return the number of bytes copied into `b'
+		return n, nil
+	}
+	return rac.Conn.Read(b)
+}
+
+type UpgradableConn struct {
+	net.Conn
+	tlsConfig    *tls.Config
+	initializing bool
+}
+
+func (uc *UpgradableConn) Read(b []byte) (int, error) {
+	if uc.initializing {
+		uc.initializing = false
+
+		n, err := uc.Conn.Read(b)
+		if err != nil {
+			return 0, err
+		}
+
+		if n < 4 {
+			// TODO: we may not have 4 bytes available right now, be careful
+			panic("don't know what to do")
+		}
+
+		if string(b[:4]) != "HTTP" {
+			// convert to tls
+			bs := make([]byte, n)
+			copy(bs, b)
+			uc.Conn = tls.Server(&ReadAheadConn{Conn: uc.Conn, buf: bs}, uc.tlsConfig)
+		} else {
+			return n, err
+		}
+	}
+
+	return uc.Conn.Read(b)
+}
+
 func initializeAuctionServer(logger lager.Logger, runner auctiontypes.AuctionRunner) ifrit.Runner {
-	return http_server.New(*listenAddr, handlers.New(runner, logger))
+	// return http_server.New(*listenAddr, handlers.New(runner, logger))
+	// TODO: listener = <create custom listener>
+	listener, err := net.Listen("tcp", *listenAddr)
+	if err != nil {
+		panic(err)
+	}
+	cl := &CustomListener{
+		Listener: listener,
+	}
+	return http_server.NewServerFromListener(handlers.New(runner, logger), cl)
 }
 
 func initializeRegistrationRunner(logger lager.Logger, consulClient consuladapter.Client, clock clock.Clock, port int) ifrit.Runner {
@@ -253,7 +335,6 @@ func initializeLockMaintainer(logger lager.Logger, serviceClient auctioneer.Serv
 
 	address := fmt.Sprintf("%s://%s:%d", serverProtocol, localIP, port)
 	auctioneerPresence := auctioneer.NewPresence(uuid.String(), address)
-
 	lockMaintainer, err := serviceClient.NewAuctioneerLockRunner(logger, auctioneerPresence, *lockRetryInterval, *lockTTL)
 	if err != nil {
 		logger.Fatal("Couldn't create lock maintainer", err)
