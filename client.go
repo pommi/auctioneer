@@ -2,6 +2,7 @@ package auctioneer
 
 import (
 	"bytes"
+	"crypto/tls"
 	"encoding/json"
 	"fmt"
 	"net/http"
@@ -27,6 +28,32 @@ func NewClient(auctioneerURL string) Client {
 		url:        auctioneerURL,
 	}
 }
+
+func NewSecureClient(url, caFile, certFile, keyFile string, clientSessionCacheSize, maxIdleConnsPerHost int) Client {
+	client := &auctioneerClient{
+		httpClient: cfhttp.NewClient(),
+		url:        url,
+	}
+	tlsConfig, err := cfhttp.NewTLSConfig(certFile, keyFile, caFile)
+	if err != nil {
+		return nil
+	}
+	tlsConfig.ClientSessionCache = tls.NewLRUClientSessionCache(clientSessionCacheSize)
+	tlsConfig.InsecureSkipVerify = true
+
+	if tr, ok := client.httpClient.Transport.(*http.Transport); ok {
+		tr.TLSClientConfig = tlsConfig
+		tr.MaxIdleConnsPerHost = maxIdleConnsPerHost
+	} else {
+		return nil
+	}
+
+	return client
+}
+
+// func NewSecureClient(url, caFile, certFile, keyFile string, clientSessionCacheSize, maxIdleConnsPerHost int) (InternalClient, error) {
+// 	return newSecureClient(url, caFile, certFile, keyFile, clientSessionCacheSize, maxIdleConnsPerHost, false)
+// }
 
 func (c *auctioneerClient) RequestLRPAuctions(lrpStarts []*LRPStartRequest) error {
 	reqGen := rata.NewRequestGenerator(c.url, Routes)
