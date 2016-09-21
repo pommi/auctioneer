@@ -40,6 +40,24 @@ import (
 	"github.com/tedsuo/ifrit/sigmon"
 )
 
+var caFile = flag.String(
+	"caFile",
+	"",
+	"the certificate authority public key file to use with ssl authentication",
+)
+
+var certFile = flag.String(
+	"certFile",
+	"",
+	"the public key file to use with ssl authentication",
+)
+
+var keyFile = flag.String(
+	"keyFile",
+	"",
+	"the private key file to use with ssl authentication",
+)
+
 var communicationTimeout = flag.Duration(
 	"communicationTimeout",
 	10*time.Second,
@@ -229,7 +247,7 @@ func initializeDropsonde(logger lager.Logger) {
 
 type CustomListener struct {
 	net.Listener
-	tlsConfig *tls.Config
+	TLSConfig *tls.Config
 }
 
 func (cl *CustomListener) Accept() (net.Conn, error) {
@@ -240,7 +258,7 @@ func (cl *CustomListener) Accept() (net.Conn, error) {
 
 	return &UpgradableConn{
 		Conn:      c,
-		tlsConfig: cl.tlsConfig,
+		tlsConfig: cl.TLSConfig,
 	}, nil
 }
 
@@ -305,8 +323,19 @@ func initializeAuctionServer(logger lager.Logger, runner auctiontypes.AuctionRun
 	if err != nil {
 		panic(err)
 	}
+
+	var tlsConfig *tls.Config
+
+	if *certFile != "" {
+		tlsConfig, err = cfhttp.NewTLSConfig(*certFile, *keyFile, *caFile)
+		if err != nil {
+			panic(err)
+		}
+	}
+
 	cl := &CustomListener{
-		Listener: listener,
+		Listener:  listener,
+		TLSConfig: tlsConfig,
 	}
 	return http_server.NewServerFromListener(handlers.New(runner, logger), cl)
 }
