@@ -256,19 +256,31 @@ func (cl *CustomListener) Accept() (net.Conn, error) {
 		return nil, err
 	}
 
-	return &UpgradableConn{
-		Conn:      c,
-		tlsConfig: cl.TLSConfig,
-	}, nil
+	bs := make([]byte, 4)
+	sz := 0
+	for n, err := c.Read(bs[sz:]); sz < 4; n, err = c.Read(bs[sz:]) {
+		if err != nil {
+			return nil, err
+		}
+		sz += n
+	}
+
+	conn := &ReadAheadConn{c: c, buf: bs[:sz]}
+	if string(bs[:3]) == "GET" || string(bs[:4]) == "POST" {
+		return conn, nil
+	}
+
+	return tls.Server(conn, cl.TLSConfig), nil
 }
 
 type ReadAheadConn struct {
-	net.Conn
+	c   net.Conn
 	buf []byte
 }
 
 func (rac *ReadAheadConn) Read(b []byte) (int, error) {
 	if rac.buf != nil {
+		fmt.Println("################ have a locl buffer, returning that")
 		n := copy(b, rac.buf)
 		// if we copied all of rac.buf then set it to nil, otherwise truncate the
 		// part that was copied
@@ -280,45 +292,33 @@ func (rac *ReadAheadConn) Read(b []byte) (int, error) {
 		// return the number of bytes copied into `b'
 		return n, nil
 	}
-	return rac.Conn.Read(b)
+	return rac.c.Read(b)
 }
 
-type UpgradableConn struct {
-	net.Conn
-	tlsConfig    *tls.Config
-	initializing bool
+func (uc *ReadAheadConn) Write(b []byte) (n int, err error) {
+	fmt.Println("uc Write")
+	return uc.c.Write(b)
 }
-
-func (uc *UpgradableConn) Read(b []byte) (int, error) {
-	if uc.initializing {
-		uc.initializing = false
-
-		n, err := uc.Conn.Read(b)
-		if err != nil {
-			return 0, err
-		}
-
-		if n < 4 {
-			// TODO: we may not have 4 bytes available right now, be careful
-			panic("don't know what to do")
-		}
-
-		if string(b[:4]) != "HTTP" {
-			// convert to tls
-			bs := make([]byte, n)
-			copy(bs, b)
-			uc.Conn = tls.Server(&ReadAheadConn{Conn: uc.Conn, buf: bs}, uc.tlsConfig)
-		} else {
-			return n, err
-		}
-	}
-
-	return uc.Conn.Read(b)
+func (uc *ReadAheadConn) Close() error        { fmt.Println("uc Close"); return uc.c.Close() }
+func (uc *ReadAheadConn) LocalAddr() net.Addr { fmt.Println("uc LocalAddr"); return uc.c.LocalAddr() }
+func (uc *ReadAheadConn) RemoteAddr() net.Addr {
+	fmt.Println("uc RemoteAddr")
+	return uc.c.RemoteAddr()
+}
+func (uc *ReadAheadConn) SetDeadline(t time.Time) error {
+	fmt.Println("uc SetDeadline")
+	return uc.c.SetDeadline(t)
+}
+func (uc *ReadAheadConn) SetReadDeadline(t time.Time) error {
+	fmt.Println("uc SetReadDeadline")
+	return uc.c.SetReadDeadline(t)
+}
+func (uc *ReadAheadConn) SetWriteDeadline(t time.Time) error {
+	fmt.Println("uc SetWriteDeadline")
+	return uc.c.SetReadDeadline(t)
 }
 
 func initializeAuctionServer(logger lager.Logger, runner auctiontypes.AuctionRunner) ifrit.Runner {
-	// return http_server.New(*listenAddr, handlers.New(runner, logger))
-	// TODO: listener = <create custom listener>
 	listener, err := net.Listen("tcp", *listenAddr)
 	if err != nil {
 		panic(err)
