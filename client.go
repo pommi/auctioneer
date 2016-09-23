@@ -39,7 +39,7 @@ func NewSecureClient(url, caFile, certFile, keyFile string, clientSessionCacheSi
 		return nil
 	}
 	tlsConfig.ClientSessionCache = tls.NewLRUClientSessionCache(clientSessionCacheSize)
-	tlsConfig.InsecureSkipVerify = true
+	tlsConfig.InsecureSkipVerify = false
 
 	if tr, ok := client.httpClient.Transport.(*http.Transport); ok {
 		tr.TLSClientConfig = tlsConfig
