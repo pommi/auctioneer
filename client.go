@@ -2,6 +2,7 @@ package auctioneer
 
 import (
 	"bytes"
+	"crypto/tls"
 	"encoding/json"
 	"fmt"
 	"net/http"
@@ -16,6 +17,44 @@ type Client interface {
 	RequestTaskAuctions(tasks []*TaskStartRequest) error
 }
 
+type TLSConfig struct {
+	RequireTLS                    bool
+	CertFile, KeyFile, CaCertFile string
+	ClientCacheSize               int // the tls client cache size, 0 means use golang default value
+}
+
+// return true if all the certs files are set in the struct, i.e. not ""
+func (config *TLSConfig) hasCreds() bool {
+	return config.CaCertFile != "" &&
+		config.KeyFile != "" &&
+		config.CertFile != ""
+}
+
+func (config *TLSConfig) insecureMode() bool {
+	return !config.RequireTLS &&
+		config.CaCertFile == "" &&
+		config.KeyFile == "" &&
+		config.CertFile == ""
+}
+
+func (tlsConfig *TLSConfig) modifyTransport(client *http.Client) error {
+	if !tlsConfig.hasCreds() {
+		return nil
+	}
+
+	if transport, ok := client.Transport.(*http.Transport); ok {
+		config, err := cfhttp.NewTLSConfig(tlsConfig.CertFile, tlsConfig.KeyFile, tlsConfig.CaCertFile)
+		if err != nil {
+			return err
+		}
+
+		config.ClientSessionCache = tls.NewLRUClientSessionCache(tlsConfig.ClientCacheSize)
+
+		transport.TLSClientConfig = config
+	}
+	return nil
+}
+
 type auctioneerClient struct {
 	httpClient *http.Client
 	url        string
@@ -26,6 +65,33 @@ func NewClient(auctioneerURL string) Client {
 		httpClient: cfhttp.NewClient(),
 		url:        auctioneerURL,
 	}
+}
+
+type ClientFactory interface {
+	CreateClient(url string) Client
+}
+
+type clientFactory struct {
+	httpClient *http.Client
+	tlsConfig  *TLSConfig
+}
+
+func (c *clientFactory) CreateClient(url string) Client {
+	return NewClient(url)
+}
+
+func NewClientFactory(httpClient *http.Client, tlsConfig *TLSConfig) (ClientFactory, error) {
+	if tlsConfig != nil {
+		if !(tlsConfig.hasCreds() || tlsConfig.insecureMode()) {
+			return nil, fmt.Errorf("HTTPS error: One or more TLS credentials is unspecified")
+		}
+
+		if err := tlsConfig.modifyTransport(httpClient); err != nil {
+			return nil, err
+		}
+	}
+
+	return &clientFactory{httpClient, tlsConfig}, nil
 }
 
 func (c *auctioneerClient) RequestLRPAuctions(lrpStarts []*LRPStartRequest) error {

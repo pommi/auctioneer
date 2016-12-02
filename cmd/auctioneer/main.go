@@ -146,6 +146,30 @@ var bbsMaxIdleConnsPerHost = flag.Int(
 	"Controls the maximum number of idle (keep-alive) connctions per host. If zero, golang's default will be used",
 )
 
+var auctioneerCACert = flag.String(
+	"auctioneerCACert",
+	"",
+	"path to the certificate authority cert used by the auctioneer server for mutual TLS communication",
+)
+
+var auctioneerCert = flag.String(
+	"auctioneerCert",
+	"",
+	"path to the cert used by the auctioneer server for mutual TLS communication",
+)
+
+var auctioneerKey = flag.String(
+	"auctioneerKey",
+	"",
+	"path to the key used by the auctioneer server for mutual TLS communication",
+)
+
+var auctioneerClientSessionCacheSize = flag.Int(
+	"auctioneerClientSessionCacheSize",
+	0,
+	"Capacity of the ClientSessionCache option on the TLS configuration. If zero, golang's default will be used",
+)
+
 var auctionRunnerWorkers = flag.Int(
 	"auctionRunnerWorkers",
 	1000,
