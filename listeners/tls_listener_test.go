@@ -11,7 +11,7 @@ import (
 	. "github.com/onsi/gomega"
 )
 
-var _ = FDescribe("Upgradable TLS Listener", func() {
+var _ = Describe("Upgradable TLS Listener", func() {
 	var listener net.Listener
 	var fakeListener *listenersfakes.FakeListener
 
@@ -24,8 +24,15 @@ var _ = FDescribe("Upgradable TLS Listener", func() {
 		It("returns an UpgradableConn", func() {
 			conn, err := listener.Accept()
 			Expect(err).NotTo(HaveOccurred())
-			_, ok := conn.(*UpgradableConn)
+			Expect(fakeListener.AcceptCallCount()).To(Equal(1))
+			conn, ok := conn.(*UpgradableConn)
 			Expect(ok).To(BeTrue())
+		})
+
+		It("returns error when the connection passed to it is nil", func() {
+			listener = NewUpgradableTLSListener(nil)
+			_, err := listener.Accept()
+			Expect(err).To(HaveOccurred())
 		})
 	})
 

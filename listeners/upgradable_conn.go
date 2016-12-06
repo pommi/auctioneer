@@ -12,6 +12,12 @@ type UpgradableConn struct {
 	iniitalizing bool
 }
 
+func NewUpgradableConn(conn net.Conn) net.Conn {
+	return &UpgradableConn{
+		conn: conn,
+	}
+}
+
 func (u *UpgradableConn) Read(b []byte) (n int, err error)   { return 0, nil }
 func (u *UpgradableConn) Write(b []byte) (n int, err error)  { return 0, nil }
 func (u *UpgradableConn) Close() error                       { return nil }

@@ -2,6 +2,7 @@ package listeners
 
 import (
 	"crypto/tls"
+	"errors"
 	"net"
 )
 
@@ -21,7 +22,18 @@ func NewUpgradableTLSListener(listener net.Listener) net.Listener {
 }
 
 func (u *upgradableTLSListener) Accept() (net.Conn, error) {
-	return &UpgradableConn{}, nil
+	if u.listener == nil {
+		return nil, errors.New("listener is nil")
+	}
+
+	c, err := u.listener.Accept()
+	if err != nil {
+		return nil, err
+	}
+
+	return &UpgradableConn{
+		conn: c,
+	}, nil
 }
 
 func (u *upgradableTLSListener) Close() error {
