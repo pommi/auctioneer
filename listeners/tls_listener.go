@@ -26,13 +26,13 @@ func (u *upgradableTLSListener) Accept() (net.Conn, error) {
 		return nil, errors.New("listener is nil")
 	}
 
-	c, err := u.listener.Accept()
+	_, err := u.listener.Accept()
 	if err != nil {
 		return nil, err
 	}
 
 	return &UpgradableConn{
-		conn: c,
+	// conn: c,
 	}, nil
 }
 

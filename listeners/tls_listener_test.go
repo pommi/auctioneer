@@ -24,8 +24,7 @@ var _ = Describe("Upgradable TLS Listener", func() {
 		It("returns an UpgradableConn", func() {
 			conn, err := listener.Accept()
 			Expect(err).NotTo(HaveOccurred())
-			Expect(fakeListener.AcceptCallCount()).To(Equal(1))
-			conn, ok := conn.(*UpgradableConn)
+			_, ok := conn.(*UpgradableConn)
 			Expect(ok).To(BeTrue())
 		})
 

@@ -12,7 +12,7 @@ type UpgradableConn struct {
 	iniitalizing bool
 }
 
-func NewUpgradableConn(conn net.Conn) net.Conn {
+func NewUpgradableConn(conn net.Conn) *UpgradableConn {
 	return &UpgradableConn{
 		conn: conn,
 	}

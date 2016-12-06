@@ -13,7 +13,6 @@ import (
 )
 
 var _ = Describe("Secure", func() {
-
 	var (
 		certPath                      string
 		factory                       auctioneer.ClientFactory
@@ -61,6 +60,7 @@ var _ = Describe("Secure", func() {
 						CaCertFile: caCertFile,
 					}
 				})
+
 				It("accepts the connection", func() {
 					client := factory.CreateClient(auctioneerAddress)
 					Eventually(func() error {
@@ -105,6 +105,7 @@ var _ = Describe("Secure", func() {
 						CaCertFile: caCertFile,
 					}
 				})
+
 				It("accepts the connection", func() {
 					client := factory.CreateClient(auctioneerAddressSecurable)
 					Eventually(func() error {
@@ -113,7 +114,7 @@ var _ = Describe("Secure", func() {
 				})
 			})
 
-			Describe("When requireTLS is set", func() {
+			XDescribe("When requireTLS is set", func() {
 				BeforeEach(func() {
 					tlsConfig = &auctioneer.TLSConfig{
 						RequireTLS: true,
@@ -122,6 +123,7 @@ var _ = Describe("Secure", func() {
 						CaCertFile: caCertFile,
 					}
 				})
+
 				It("accepts the connection", func() {
 					client := factory.CreateClient(auctioneerAddressSecurable)
 					Eventually(func() error {
