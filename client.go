@@ -24,21 +24,20 @@ type TLSConfig struct {
 }
 
 // return true if all the certs files are set in the struct, i.e. not ""
-func (config *TLSConfig) hasCreds() bool {
+func (config *TLSConfig) hasAllCreds() bool {
 	return config.CaCertFile != "" &&
 		config.KeyFile != "" &&
 		config.CertFile != ""
 }
 
-func (config *TLSConfig) insecureMode() bool {
-	return !config.RequireTLS &&
-		config.CaCertFile == "" &&
+func (config *TLSConfig) hasNoCreds() bool {
+	return config.CaCertFile == "" &&
 		config.KeyFile == "" &&
 		config.CertFile == ""
 }
 
 func (tlsConfig *TLSConfig) modifyTransport(client *http.Client) error {
-	if !tlsConfig.hasCreds() {
+	if !tlsConfig.hasAllCreds() {
 		return nil
 	}
 
@@ -81,14 +80,16 @@ func (c *clientFactory) CreateClient(url string) Client {
 }
 
 func NewClientFactory(httpClient *http.Client, tlsConfig *TLSConfig) (ClientFactory, error) {
-	if tlsConfig != nil {
-		if !(tlsConfig.hasCreds() || tlsConfig.insecureMode()) {
-			return nil, fmt.Errorf("HTTPS error: One or more TLS credentials is unspecified")
-		}
+	if tlsConfig == nil {
+		tlsConfig = &TLSConfig{}
+	}
 
-		if err := tlsConfig.modifyTransport(httpClient); err != nil {
-			return nil, err
-		}
+	if !tlsConfig.hasAllCreds() && !tlsConfig.hasNoCreds() {
+		return nil, fmt.Errorf("HTTPS error: One or more TLS credentials is unspecified")
+	}
+
+	if err := tlsConfig.modifyTransport(httpClient); err != nil {
+		return nil, err
 	}
 
 	return &clientFactory{httpClient, tlsConfig}, nil

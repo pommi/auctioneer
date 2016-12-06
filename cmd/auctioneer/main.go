@@ -146,20 +146,20 @@ var bbsMaxIdleConnsPerHost = flag.Int(
 	"Controls the maximum number of idle (keep-alive) connctions per host. If zero, golang's default will be used",
 )
 
-var auctioneerCACert = flag.String(
-	"auctioneerCACert",
+var auctioneerServerCACert = flag.String(
+	"auctioneerServerCACert",
 	"",
 	"path to the certificate authority cert used by the auctioneer server for mutual TLS communication",
 )
 
-var auctioneerCert = flag.String(
-	"auctioneerCert",
+var auctioneerServerCert = flag.String(
+	"auctioneerServerCert",
 	"",
 	"path to the cert used by the auctioneer server for mutual TLS communication",
 )
 
-var auctioneerKey = flag.String(
-	"auctioneerKey",
+var auctioneerServerKey = flag.String(
+	"auctioneerServerKey",
 	"",
 	"path to the key used by the auctioneer server for mutual TLS communication",
 )
@@ -290,6 +290,16 @@ func initializeDropsonde(logger lager.Logger) {
 }
 
 func initializeAuctionServer(logger lager.Logger, runner auctiontypes.AuctionRunner) ifrit.Runner {
+
+	// if secure {
+	// 	tlsConfig, err := cfhttp.NewTLSConfig(*auctioneerServerCert, *auctioneerServerKey, *auctioneerServerCACert)
+	// 	if err != nil {
+	// 		logger.Fatal("tls-configuration-failed", err)
+	// 	}
+
+	// 	return http_server.NewTLSServer(*listenAddr, handlers.New(runner, logger), tlsConfig)
+	// }
+
 	return http_server.New(*listenAddr, handlers.New(runner, logger))
 }
 

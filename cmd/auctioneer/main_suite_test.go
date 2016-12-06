@@ -3,7 +3,9 @@ package main_test
 import (
 	"fmt"
 	"net/url"
+	"os"
 	"os/exec"
+	"path"
 	"strings"
 
 	"code.cloudfoundry.org/auctioneer"
@@ -40,9 +42,10 @@ var (
 	linuxRootFSURL        = models.PreloadedRootFS(linuxStack)
 	dotNetCell, linuxCell *FakeCell
 
-	auctioneerServerPort int
-	auctioneerAddress    string
-	runner               *ginkgomon.Runner
+	auctioneerServerPort       int
+	auctioneerAddress          string
+	auctioneerAddressSecurable string
+	runner                     *ginkgomon.Runner
 
 	etcdPort   int
 	etcdRunner *etcdstorerunner.ETCDClusterRunner
@@ -91,6 +94,7 @@ var _ = SynchronizedBeforeSuite(func() []byte {
 
 	auctioneerServerPort = 1800 + GinkgoParallelNode()
 	auctioneerAddress = fmt.Sprintf("http://127.0.0.1:%d", auctioneerServerPort)
+	auctioneerAddressSecurable = fmt.Sprintf("https://127.0.0.1:%d", auctioneerServerPort)
 
 	etcdPort = 5001 + GinkgoParallelNode()
 	etcdRunner = etcdstorerunner.NewETCDClusterRunner(etcdPort, 1, nil)
@@ -156,12 +160,16 @@ var _ = BeforeEach(func() {
 
 	serviceClient := bbs.NewServiceClient(consulClient, clock.NewClock())
 
+	certPath := path.Join(os.Getenv("GOPATH"), "src/code.cloudfoundry.org/auctioneer/cmd/auctioneer/fixtures/certs")
 	runner = ginkgomon.New(ginkgomon.Config{
 		Name: "auctioneer",
 		Command: exec.Command(
 			auctioneerPath,
 			"-bbsAddress", bbsURL.String(),
 			"-listenAddr", fmt.Sprintf("0.0.0.0:%d", auctioneerServerPort),
+			"-auctioneerServerCACert", path.Join(certPath, "server-ca.crt"),
+			"-auctioneerServerCert", path.Join(certPath, "server.crt"),
+			"-auctioneerServerKey", path.Join(certPath, "server.key"),
 			"-lockRetryInterval", "1s",
 			"-consulCluster", consulRunner.ConsulCluster(),
 		),
