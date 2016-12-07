@@ -18,7 +18,6 @@ import (
 	"code.cloudfoundry.org/lager"
 	"code.cloudfoundry.org/lager/lagertest"
 	. "github.com/onsi/ginkgo"
-	"github.com/onsi/ginkgo/config"
 	. "github.com/onsi/gomega"
 	"github.com/onsi/gomega/gexec"
 	"github.com/tedsuo/ifrit"
@@ -40,8 +39,9 @@ var (
 	dotNetCell, linuxCell *FakeCell
 
 	auctioneerServerPort int
-	auctioneerAddress    string
+	auctioneerLocation   string
 	runner               *ginkgomon.Runner
+	auctioneerArgs       []string
 
 	consulRunner *consulrunner.ClusterRunner
 	consulClient consuladapter.Client
@@ -86,19 +86,19 @@ var _ = SynchronizedBeforeSuite(func() []byte {
 	auctioneerPath = string(compiledAuctioneerPath)
 
 	auctioneerServerPort = 1800 + GinkgoParallelNode()
-	auctioneerAddress = fmt.Sprintf("http://127.0.0.1:%d", auctioneerServerPort)
+	auctioneerLocation = fmt.Sprintf("127.0.0.1:%d", auctioneerServerPort)
 
 	dbName := fmt.Sprintf("diego_%d", GinkgoParallelNode())
 	sqlRunner = test_helpers.NewSQLRunner(dbName)
 	sqlProcess = ginkgomon.Invoke(sqlRunner)
 
 	consulRunner = consulrunner.NewClusterRunner(
-		9001+config.GinkgoConfig.ParallelNode*consulrunner.PortOffsetLength,
+		9001+GinkgoParallelNode()*consulrunner.PortOffsetLength,
 		1,
 		"http",
 	)
 
-	auctioneerClient = auctioneer.NewClient(auctioneerAddress)
+	auctioneerClient = auctioneer.NewClient("http://" + auctioneerLocation)
 
 	logger = lagertest.NewTestLogger("test")
 
@@ -120,7 +120,7 @@ var _ = SynchronizedBeforeSuite(func() []byte {
 	bbsArgs = bbstestrunner.Args{
 		Address:           bbsAddress,
 		AdvertiseURL:      bbsURL.String(),
-		AuctioneerAddress: auctioneerAddress,
+		AuctioneerAddress: "http://" + auctioneerLocation,
 		ConsulCluster:     consulRunner.ConsulCluster(),
 		HealthAddress:     healthAddress,
 
@@ -132,6 +132,8 @@ var _ = SynchronizedBeforeSuite(func() []byte {
 })
 
 var _ = BeforeEach(func() {
+	auctioneerArgs = []string{}
+
 	consulRunner.Reset()
 
 	bbsRunner = bbstestrunner.New(bbsBinPath, bbsArgs)
@@ -141,20 +143,26 @@ var _ = BeforeEach(func() {
 
 	serviceClient := bbs.NewServiceClient(consulClient, clock.NewClock())
 
+	dotNetCell = SpinUpFakeCell(serviceClient, "dot-net-cell", "", dotNetStack)
+	linuxCell = SpinUpFakeCell(serviceClient, "linux-cell", "", linuxStack)
+})
+
+var _ = JustBeforeEach(func() {
+	auctioneerArgs = append([]string{
+		"-bbsAddress", bbsURL.String(),
+		"-listenAddr", auctioneerLocation,
+		"-lockRetryInterval", "1s",
+		"-consulCluster", consulRunner.ConsulCluster(),
+	}, auctioneerArgs...)
+
 	runner = ginkgomon.New(ginkgomon.Config{
 		Name: "auctioneer",
 		Command: exec.Command(
 			auctioneerPath,
-			"-bbsAddress", bbsURL.String(),
-			"-listenAddr", fmt.Sprintf("0.0.0.0:%d", auctioneerServerPort),
-			"-lockRetryInterval", "1s",
-			"-consulCluster", consulRunner.ConsulCluster(),
+			auctioneerArgs...,
 		),
 		StartCheck: "auctioneer.started",
 	})
-
-	dotNetCell = SpinUpFakeCell(serviceClient, "dot-net-cell", "", dotNetStack)
-	linuxCell = SpinUpFakeCell(serviceClient, "linux-cell", "", linuxStack)
 })
 
 var _ = AfterEach(func() {

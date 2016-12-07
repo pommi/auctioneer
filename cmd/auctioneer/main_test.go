@@ -14,6 +14,7 @@ import (
 	"github.com/hashicorp/consul/api"
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
+	"github.com/onsi/gomega/gbytes"
 	. "github.com/onsi/gomega/gexec"
 	"github.com/tedsuo/ifrit"
 	"github.com/tedsuo/ifrit/ginkgomon"
@@ -44,9 +45,8 @@ func exampleTaskDefinition() *models.TaskDefinition {
 }
 
 var _ = Describe("Auctioneer", func() {
-
 	Context("when the bbs is down", func() {
-		BeforeEach(func() {
+		JustBeforeEach(func() {
 			ginkgomon.Interrupt(bbsProcess)
 			auctioneerProcess = ginkgomon.Invoke(runner)
 		})
@@ -62,7 +62,7 @@ var _ = Describe("Auctioneer", func() {
 	})
 
 	Context("when the auctioneer starts up", func() {
-		BeforeEach(func() {
+		JustBeforeEach(func() {
 			auctioneerProcess = ginkgomon.Invoke(runner)
 		})
 
@@ -98,7 +98,7 @@ var _ = Describe("Auctioneer", func() {
 	})
 
 	Context("when a start auction message arrives", func() {
-		BeforeEach(func() {
+		JustBeforeEach(func() {
 			auctioneerProcess = ginkgomon.Invoke(runner)
 
 			err := auctioneerClient.RequestLRPAuctions([]*auctioneer.LRPStartRequest{{
@@ -137,27 +137,25 @@ var _ = Describe("Auctioneer", func() {
 	})
 
 	Context("when a task message arrives", func() {
-		BeforeEach(func() {
+		JustBeforeEach(func() {
 			auctioneerProcess = ginkgomon.Invoke(runner)
 		})
 
 		Context("when there are sufficient resources to start the task", func() {
-			BeforeEach(func() {
+			It("should start the task running on reps of the appropriate stack", func() {
 				taskDef := exampleTaskDefinition()
 				taskDef.DiskMb = 1
 				taskDef.MemoryMb = 1
 				err := bbsClient.DesireTask(logger, "guid", "domain", taskDef)
 				Expect(err).NotTo(HaveOccurred())
-			})
 
-			It("should start the task running on reps of the appropriate stack", func() {
 				Eventually(linuxCell.Tasks).Should(HaveLen(1))
 				Expect(dotNetCell.Tasks()).To(BeEmpty())
 			})
 		})
 
 		Context("when there are insufficient resources to start the task", func() {
-			BeforeEach(func() {
+			JustBeforeEach(func() {
 				taskDef := exampleTaskDefinition()
 				taskDef.DiskMb = 1000
 				taskDef.MemoryMb = 1000
@@ -186,7 +184,7 @@ var _ = Describe("Auctioneer", func() {
 	})
 
 	Context("when the auctioneer loses the lock", func() {
-		BeforeEach(func() {
+		JustBeforeEach(func() {
 			auctioneerProcess = ginkgomon.Invoke(runner)
 			consulRunner.Reset()
 		})
@@ -197,10 +195,12 @@ var _ = Describe("Auctioneer", func() {
 	})
 
 	Context("when the auctioneer cannot acquire the lock on startup", func() {
-		var task *rep.Task
-		var competingAuctioneerProcess ifrit.Process
+		var (
+			task                       *rep.Task
+			competingAuctioneerProcess ifrit.Process
+		)
 
-		BeforeEach(func() {
+		JustBeforeEach(func() {
 			task = &rep.Task{
 				TaskGuid: "task-guid",
 				Domain:   "test",
@@ -243,6 +243,125 @@ var _ = Describe("Auctioneer", func() {
 			}).ShouldNot(HaveOccurred())
 		})
 	})
+
+	Context("when the auctioneer is configured with TLS options", func() {
+		var caCertFile, serverCertFile, serverKeyFile string
+
+		BeforeEach(func() {
+			caCertFile = "fixtures/green-certs/ca.crt"
+			serverCertFile = "fixtures/green-certs/server.crt"
+			serverKeyFile = "fixtures/green-certs/server.key"
+
+			auctioneerArgs = []string{
+				"-caCertFile", caCertFile,
+				"-serverCertFile", serverCertFile,
+				"-serverKeyFile", serverKeyFile,
+			}
+		})
+
+		JustBeforeEach(func() {
+			auctioneerProcess = ifrit.Background(runner)
+		})
+
+		AfterEach(func() {
+			ginkgomon.Kill(auctioneerProcess)
+		})
+
+		Context("when invalid values for the certificates are supplied", func() {
+			BeforeEach(func() {
+				auctioneerArgs = []string{
+					"-caCertFile", caCertFile,
+					"-serverCertFile", "invalid-certs/server.cr",
+					"-serverKeyFile", serverKeyFile,
+				}
+			})
+
+			It("fails", func() {
+				Eventually(runner.Buffer()).Should(gbytes.Say(
+					"invalid-tls-config"))
+				Eventually(runner.ExitCode()).ShouldNot(Equal(0))
+			})
+		})
+
+		Context("when invalid combinations of the certificates are supplied", func() {
+			Context("when the server cert file isn't specified", func() {
+				BeforeEach(func() {
+					auctioneerArgs = []string{
+						"-caCertFile", caCertFile,
+						"-serverKeyFile", serverKeyFile,
+					}
+				})
+
+				It("fails", func() {
+					Eventually(runner.Buffer()).Should(gbytes.Say(
+						"invalid-tls-config"))
+					Eventually(runner.ExitCode()).ShouldNot(Equal(0))
+				})
+			})
+
+			Context("when the server cert file and server key file aren't specified", func() {
+				BeforeEach(func() {
+					auctioneerArgs = []string{
+						"-caCertFile", caCertFile,
+					}
+				})
+
+				It("fails", func() {
+					Eventually(runner.Buffer()).Should(gbytes.Say(
+						"invalid-tls-config"))
+					Eventually(runner.ExitCode()).ShouldNot(Equal(0))
+				})
+			})
+
+			Context("when the server key file isn't specified", func() {
+				BeforeEach(func() {
+					auctioneerArgs = []string{
+						"-caCertFile", caCertFile,
+						"-serverCertFile", serverCertFile,
+					}
+				})
+
+				It("fails", func() {
+					Eventually(runner.Buffer()).Should(gbytes.Say(
+						"invalid-tls-config"))
+					Eventually(runner.ExitCode()).ShouldNot(Equal(0))
+				})
+			})
+		})
+
+		Context("when the server key and the CA cert don't match", func() {
+			BeforeEach(func() {
+				auctioneerArgs = []string{
+					"-caCertFile", caCertFile,
+					"-serverCertFile", serverCertFile,
+					"-serverKeyFile", "fixtures/blue-certs/server.key",
+				}
+			})
+
+			It("fails", func() {
+				Eventually(runner.Buffer()).Should(gbytes.Say(
+					"invalid-tls-config"))
+				Eventually(runner.ExitCode()).ShouldNot(Equal(0))
+			})
+		})
+
+		Context("when correct TLS options are supplied", func() {
+			It("starts", func() {
+				Eventually(auctioneerProcess.Ready()).Should(BeClosed())
+				Consistently(runner).ShouldNot(Exit())
+			})
+
+			It("responds successfully to a TLS client", func() {
+				Eventually(auctioneerProcess.Ready()).Should(BeClosed())
+
+				secureAuctioneerClient, err := auctioneer.NewSecureClient("https://"+auctioneerLocation, caCertFile, serverCertFile, serverKeyFile)
+				Expect(err).NotTo(HaveOccurred())
+
+				err = secureAuctioneerClient.RequestLRPAuctions(nil)
+				Expect(err).NotTo(HaveOccurred())
+			})
+		})
+	})
 })
 
 func getTasksByState(client bbs.InternalClient, state models.Task_State) []*models.Task {
@@ -255,5 +374,6 @@ func getTasksByState(client bbs.InternalClient, state models.Task_State) []*mode
 			filteredTasks = append(filteredTasks, task)
 		}
 	}
+
 	return filteredTasks
 }
