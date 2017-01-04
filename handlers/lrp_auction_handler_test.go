@@ -137,4 +137,32 @@ var _ = Describe("LRPAuctionHandler", func() {
 			})
 		})
 	})
+
+	Describe("FlattenLRPGuids", func() {
+		Context("a map with two valid entries", func() {
+			It("returns a JSON string of objects with separate GUIDs and indices", func() {
+				lrpGuids := make(map[string][]int)
+				lrpGuids["sandwich"] = []int{0, 1}
+				lrpGuids["cannoli"] = []int{1, 2}
+
+				expectedLRPGuids := "[{\"guid\":\"sandwich\",\"indices\":[0,1]},{\"guid\":\"cannoli\",\"indices\":[1,2]}]"
+
+				flattenedLRPGuids, err := handlers.FlattenLRPGuids(lrpGuids)
+				Expect(err).NotTo(HaveOccurred())
+				Expect(flattenedLRPGuids).To(Equal(expectedLRPGuids))
+			})
+		})
+
+		Context("on an empty map", func() {
+			It("returns a JSON representation of an empty array", func() {
+				lrpGuids := make(map[string][]int)
+
+				expectedLRPGuids := "[]"
+
+				flattenedLRPGuids, err := handlers.FlattenLRPGuids(lrpGuids)
+				Expect(err).NotTo(HaveOccurred())
+				Expect(flattenedLRPGuids).To(Equal(expectedLRPGuids))
+			})
+		})
+	})
 })

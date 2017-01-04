@@ -57,6 +57,32 @@ func (h *LRPAuctionHandler) Create(w http.ResponseWriter, r *http.Request, logge
 	}
 
 	h.runner.ScheduleLRPsForAuctions(validStarts)
-	logger.Info("submitted", lager.Data{"lrps": lrpGuids})
+
+	flattenedGuids, err := FlattenLRPGuids(lrpGuids)
+
+	if err != nil {
+		logger.Error("malformed-json-in-lrp-guids", err)
+		writeInvalidJSONResponse(w, err)
+		return
+	}
+
+	logger.Info("submitted", lager.Data{"lrps": flattenedGuids})
 	writeStatusAcceptedResponse(w)
+}
+
+func FlattenLRPGuids(lrps map[string][]int) (string, error) {
+	type lrpStruct struct {
+		Guid    string `json:"guid"`
+		Indices []int  `json:"indices"`
+	}
+
+	lrpArray := []lrpStruct{}
+
+	for guid, indices := range lrps {
+		lrp := lrpStruct{guid, indices}
+		lrpArray = append(lrpArray, lrp)
+	}
+
+	lrpBytes, err := json.Marshal(lrpArray)
+	return string(lrpBytes), err
 }
