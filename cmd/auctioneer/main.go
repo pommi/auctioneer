@@ -208,11 +208,11 @@ func main() {
 	}
 
 	clock := clock.NewClock()
-	auctioneerServiceClient := auctioneer.NewServiceClient(consulClient, clock)
+	// auctioneerServiceClient := auctioneer.NewServiceClient(consulClient, clock)
 
 	auctionRunner := initializeAuctionRunner(logger, *cellStateTimeout,
-		initializeBBSClient(logger), *startingContainerWeight)
-	lockMaintainer := initializeLockMaintainer(logger, auctioneerServiceClient, port)
+		initializeBBSClient(logger), *startingContainerWeight, *listenAddr)
+	// lockMaintainer := initializeLockMaintainer(logger, auctioneerServiceClient, port)
 	registrationRunner := initializeRegistrationRunner(logger, consulClient, clock, port)
 
 	var auctionServer ifrit.Runner
@@ -227,7 +227,7 @@ func main() {
 	}
 
 	members := grouper.Members{
-		{"lock-maintainer", lockMaintainer},
+		// "lock-maintainer", lockMaintainer},
 		{"auction-runner", auctionRunner},
 		{"auction-server", auctionServer},
 		{"registration-runner", registrationRunner},
@@ -254,7 +254,7 @@ func main() {
 	logger.Info("exited")
 }
 
-func initializeAuctionRunner(logger lager.Logger, cellStateTimeout time.Duration, bbsClient bbs.InternalClient, startingContainerWeight float64) auctiontypes.AuctionRunner {
+func initializeAuctionRunner(logger lager.Logger, cellStateTimeout time.Duration, bbsClient bbs.InternalClient, startingContainerWeight float64, identifier string) auctiontypes.AuctionRunner {
 	httpClient := cfhttp.NewClient()
 	stateClient := cfhttp.NewCustomTimeoutClient(cellStateTimeout)
 	repTLSConfig := &rep.TLSConfig{
@@ -283,6 +283,7 @@ func initializeAuctionRunner(logger lager.Logger, cellStateTimeout time.Duration
 		clock.NewClock(),
 		workPool,
 		startingContainerWeight,
+		identifier,
 	)
 }
 
@@ -300,6 +301,7 @@ func initializeAuctionServer(logger lager.Logger, runner auctiontypes.AuctionRun
 
 func initializeRegistrationRunner(logger lager.Logger, consulClient consuladapter.Client, clock clock.Clock, port int) ifrit.Runner {
 	registration := &api.AgentServiceRegistration{
+		ID:   fmt.Sprintf("auctioneer-%d", port),
 		Name: "auctioneer",
 		Port: port,
 		Check: &api.AgentServiceCheck{

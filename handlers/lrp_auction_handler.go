@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"io/ioutil"
 	"net/http"
+	"sync/atomic"
 
 	"code.cloudfoundry.org/auction/auctiontypes"
 	"code.cloudfoundry.org/auctioneer"
@@ -57,6 +58,7 @@ func (h *LRPAuctionHandler) Create(w http.ResponseWriter, r *http.Request, logge
 	}
 
 	h.runner.ScheduleLRPsForAuctions(validStarts)
+	atomic.AddInt32(&lrpAuctionCallCount, 1)
 
 	logLRPGuids(lrpGuids, logger)
 

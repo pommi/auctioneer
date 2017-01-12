@@ -10,14 +10,25 @@ import (
 	"github.com/tedsuo/rata"
 )
 
+var (
+	lrpAuctionCallCount  int32
+	taskAuctionCallCount int32
+)
+
 func New(runner auctiontypes.AuctionRunner, logger lager.Logger) http.Handler {
+
+	lrpAuctionCallCount = 0
+	taskAuctionCallCount = 0
+
 	taskAuctionHandler := logWrap(NewTaskAuctionHandler(runner).Create, logger)
 	lrpAuctionHandler := logWrap(NewLRPAuctionHandler(runner).Create, logger)
+	reportHandler := logWrap(NewReportHandler(runner).Create, logger)
 
 	emitter := middleware.NewLatencyEmitter(logger)
 	actions := rata.Handlers{
 		auctioneer.CreateTaskAuctionsRoute: emitter.EmitLatency(taskAuctionHandler),
 		auctioneer.CreateLRPAuctionsRoute:  emitter.EmitLatency(lrpAuctionHandler),
+		auctioneer.CreateAuctionReport:     emitter.EmitLatency(reportHandler),
 	}
 
 	handler, err := rata.NewRouter(auctioneer.Routes, actions)

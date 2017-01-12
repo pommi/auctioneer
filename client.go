@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io/ioutil"
 	"net/http"
 
 	"code.cloudfoundry.org/cfhttp"
@@ -16,9 +17,10 @@ import (
 type Client interface {
 	RequestLRPAuctions(logger lager.Logger, lrpStart []*LRPStartRequest) error
 	RequestTaskAuctions(logger lager.Logger, tasks []*TaskStartRequest) error
+	RequestReport(logger lager.Logger) ([]byte, error)
 }
 
-type auctioneerClient struct {
+type AuctioneerClient struct {
 	httpClient         *http.Client
 	insecureHTTPClient *http.Client
 	url                string
@@ -26,7 +28,7 @@ type auctioneerClient struct {
 }
 
 func NewClient(auctioneerURL string) Client {
-	return &auctioneerClient{
+	return &AuctioneerClient{
 		httpClient: cfhttp.NewClient(),
 		url:        auctioneerURL,
 	}
@@ -47,7 +49,7 @@ func NewSecureClient(auctioneerURL, caFile, certFile, keyFile string, requireTLS
 		return nil, errors.New("Invalid transport")
 	}
 
-	return &auctioneerClient{
+	return &AuctioneerClient{
 		httpClient:         httpClient,
 		insecureHTTPClient: insecureHTTPClient,
 		url:                auctioneerURL,
@@ -55,7 +57,7 @@ func NewSecureClient(auctioneerURL, caFile, certFile, keyFile string, requireTLS
 	}, nil
 }
 
-func (c *auctioneerClient) RequestLRPAuctions(logger lager.Logger, lrpStarts []*LRPStartRequest) error {
+func (c *AuctioneerClient) RequestLRPAuctions(logger lager.Logger, lrpStarts []*LRPStartRequest) error {
 	logger = logger.Session("request-lrp-auctions")
 
 	reqGen := rata.NewRequestGenerator(c.url, Routes)
@@ -84,7 +86,7 @@ func (c *auctioneerClient) RequestLRPAuctions(logger lager.Logger, lrpStarts []*
 	return nil
 }
 
-func (c *auctioneerClient) RequestTaskAuctions(logger lager.Logger, tasks []*TaskStartRequest) error {
+func (c *AuctioneerClient) RequestTaskAuctions(logger lager.Logger, tasks []*TaskStartRequest) error {
 	logger = logger.Session("request-task-auctions")
 
 	reqGen := rata.NewRequestGenerator(c.url, Routes)
@@ -112,8 +114,35 @@ func (c *auctioneerClient) RequestTaskAuctions(logger lager.Logger, tasks []*Tas
 
 	return nil
 }
+func (c *AuctioneerClient) RequestReport(logger lager.Logger) ([]byte, error) {
+	logger = logger.Session("request-total-auctioned")
+	logger.Info("sending-the-request")
 
-func (c *auctioneerClient) doRequest(logger lager.Logger, req *http.Request) (*http.Response, error) {
+	reqGen := rata.NewRequestGenerator(c.url, Routes)
+	req, err := reqGen.CreateRequest(CreateAuctionReport, rata.Params{}, nil)
+	if err != nil {
+		logger.Error("failed-create-request", err)
+		return nil, err
+	}
+
+	resp, err := c.doRequest(logger, req)
+	if err != nil {
+		logger.Error("failed-request", err)
+		return nil, err
+	}
+	defer resp.Body.Close()
+
+	b, err := ioutil.ReadAll(resp.Body)
+	if err != nil {
+		logger.Error("failed-read", err)
+		return nil, err
+	}
+
+	logger.Info("response-received-successfully", lager.Data{"response": string(b)})
+	return b, nil
+}
+
+func (c *AuctioneerClient) doRequest(logger lager.Logger, req *http.Request) (*http.Response, error) {
 	resp, err := c.httpClient.Do(req)
 	if err != nil {
 		// Fall back to HTTP and try again if we do not require TLS

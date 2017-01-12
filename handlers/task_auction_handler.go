@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"io/ioutil"
 	"net/http"
+	"sync/atomic"
 
 	"code.cloudfoundry.org/auction/auctiontypes"
 	"code.cloudfoundry.org/auctioneer"
@@ -55,6 +56,7 @@ func (h *TaskAuctionHandler) Create(w http.ResponseWriter, r *http.Request, logg
 	}
 
 	h.runner.ScheduleTasksForAuctions(validTasks)
+	atomic.AddInt32(&taskAuctionCallCount, 1)
 
 	logger.Info("submitted", lager.Data{"tasks": taskGuids})
 	writeStatusAcceptedResponse(w)
