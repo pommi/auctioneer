@@ -81,7 +81,7 @@ var _ = Describe("Auctioneer", func() {
 	)
 
 	BeforeEach(func() {
-		fixturesPath := path.Join(os.Getenv("GOPATH"), "src/code.cloudfoundry.org/auctioneer/cmd/auctioneer/fixtures")
+		fixturesPath := path.Join(os.Getenv("TOPDIR"), "src/code.cloudfoundry.org/auctioneer/cmd/auctioneer/fixtures")
 
 		caFile := path.Join(fixturesPath, "green-certs", "ca.crt")
 		clientCertFile := path.Join(fixturesPath, "green-certs", "client.crt")
