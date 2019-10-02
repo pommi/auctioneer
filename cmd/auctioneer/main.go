@@ -222,6 +222,7 @@ func initializeAuctionRunner(logger lager.Logger, cfg config.AuctioneerConfig, b
 		metricEmitter,
 		clock.NewClock(),
 		workPool,
+		cfg.CellInstanceIndexWeight,
 		cfg.StartingContainerWeight,
 		cfg.StartingContainerCountMaximum,
 	)
